@@ -11,7 +11,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Endpoint de API sem CSRF (uso via Postman/cliente externo)
+        $middleware->validateCsrfTokens(except: [
+            'short',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
