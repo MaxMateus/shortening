@@ -1,59 +1,104 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Shortening API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+API simples para encurtar URLs, com expiracao opcional e estatisticas de acesso.
 
-## About Laravel
+**Funcionalidades**
+- Criacao de URL curta com expiracao opcional
+- Redirecionamento para a URL original
+- Estatisticas de visitas por codigo
+- Reuso da mesma URL curta se a original ainda estiver valida
+- Rate limit no redirecionamento (5 req/s por codigo+IP)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+**Stack**
+- Laravel 12
+- PHP 8.2
+- MySQL 8 (via Docker) ou outro banco suportado pelo Laravel
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+**Configuracao**
+- `APP_URL` define a base usada para montar `short_url`
+- `DB_*` deve apontar para seu banco (no Docker, `DB_HOST=db`)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+**Rodando com Docker**
+1. `docker compose up -d --build`
+2. `docker compose exec app composer install`
+3. `docker compose exec app php artisan migrate`
+4. A API fica em `http://localhost:8000`
 
-## Learning Laravel
+**Rodando localmente**
+1. `composer install`
+2. `cp .env.example .env`
+3. Ajuste `DB_*` no `.env`
+4. `php artisan key:generate`
+5. `php artisan migrate`
+6. `php artisan serve`
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+**Endpoints**
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+`POST /short`
+- Cria uma URL curta
+- Body JSON
+  - `original_url` (string, obrigatorio)
+  - `expires_in` (int, segundos, opcional)
+- Retorna `201` quando cria e `200` quando reaproveita uma URL valida
 
-## Laravel Sponsors
+Exemplo:
+```bash
+curl -X POST http://localhost:8000/short \
+  -H 'Content-Type: application/json' \
+  -d '{"original_url":"https://example.com","expires_in":3600}'
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Resposta:
+```json
+{
+  "message": "URL encurtada com sucesso.",
+  "data": {
+    "code": "Ab12Cd",
+    "short_url": "http://localhost:8000/Ab12Cd",
+    "original_url": "https://example.com",
+    "expires_at": "2026-02-05 15:30:00",
+    "expired": false
+  }
+}
+```
 
-### Premium Partners
+`GET /{code}`
+- Redireciona (HTTP 302) para a URL original
+- Se expirado, retorna `410`
+- Se nao existir, retorna `404`
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+Exemplo:
+```bash
+curl -i http://localhost:8000/Ab12Cd
+```
 
-## Contributing
+`GET /stats/{code}`
+- Retorna estatisticas da URL
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Exemplo:
+```bash
+curl http://localhost:8000/stats/Ab12Cd
+```
 
-## Code of Conduct
+Resposta:
+```json
+{
+  "data": {
+    "code": "Ab12Cd",
+    "short_url": "http://localhost:8000/Ab12Cd",
+    "original_url": "https://example.com",
+    "expires_at": null,
+    "expired": false,
+    "visits": 12
+  }
+}
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+**Erros comuns**
+- `422` Dados invalidos (ex.: `original_url` ausente ou mal formada)
+- `404` URL nao encontrada
+- `410` URL expirada
 
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+**Notas**
+- O endpoint `POST /short` esta sem CSRF para uso via clientes externos.
+- O rate limit do redirect e 5 requisicoes por segundo por combinacao `codigo+IP`.
